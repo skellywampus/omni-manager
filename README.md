@@ -49,6 +49,8 @@ On any OS, run the application by executing:
 
 `python3 omni_manager.py`
 
+or
+
 `python omni_manager.py`
 
 Note: ensure the path to the program is correct
