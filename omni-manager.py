@@ -4,8 +4,71 @@ import subprocess
 import platform
 import threading
 from tkinter.simpledialog import askstring
+import os
+
 
 class UniversalInstallerApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Omni-Manager")
+        self.root.geometry("500x400")
+
+        self.os_type = self.detect_os()
+        self.os_label = tk.Label(root, text=f"Operating System: {self.os_type}")
+        self.os_label.pack(pady=10)
+
+        self.update_var = tk.BooleanVar()
+        self.upgrade_var = tk.BooleanVar()
+
+        self.update_check = tk.Checkbutton(root, text="Update All", variable=self.update_var)
+        self.upgrade_check = tk.Checkbutton(root, text="Upgrade All", variable=self.upgrade_var)
+
+        if self.os_type != "Windows":
+            self.update_check.pack(anchor="w", padx=20)
+        self.upgrade_check.pack(anchor="w", padx=20)
+
+        self.search_label = tk.Label(root, text="Enter Program Name(s):")
+        self.search_label.pack(pady=10)
+
+        self.program_entry = tk.Entry(root, width=40)
+        self.program_entry.pack(pady=5)
+
+        self.search_button = tk.Button(root, text="Search", command=self.search_program)
+        self.search_button.pack(pady=10)
+
+        self.install_button = tk.Button(root, text="Install", command=self.install_program)
+        self.install_button.pack(pady=10)
+
+        self.search_results = []
+        self.current_page = 0
+        self.selected_program = None
+
+        self.install_progress = ttk.Progressbar(root, orient="horizontal", mode="indeterminate")
+        self.install_progress.pack(pady=5)
+        self.install_progress.pack_forget()
+
+        if self.os_type == "Mac":
+            self.check_and_install_brew()
+
+    def install_windows(self, program_name):
+        package_manager = self.package_manager_var.get()
+        install_command = None  
+
+        if package_manager == "winget":
+            install_command = ["winget", "install", program_name]
+        elif package_manager == "chocolatey":
+            install_command = ["choco", "install", program_name]
+        else:
+            messagebox.showerror("Error", "Unsupported package manager selected.")
+            return
+        if install_command:
+            try:
+                subprocess.run(install_command, check=True)
+                messagebox.showinfo("Success", f"{program_name} installed successfully.")
+            except subprocess.CalledProcessError:
+                messagebox.showerror("Installation failed", f"Failed to install {program_name}.")
+        else:
+            messagebox.showerror("Error", "Failed to generate install command.")
 
     def search_linux(self, program_name):
         try:
@@ -100,7 +163,7 @@ class UniversalInstallerApp:
             self.update_check.pack(anchor="w", padx=20)
         self.upgrade_check.pack(anchor="w", padx=20)
 
-        self.search_label = tk.Label(root, text="Enter Program Name(s):")
+        self.search_label = tk.Label(root, text="Enter Program Name or ID:")
         self.search_label.pack(pady=10)
         
         self.program_entry = tk.Entry(root, width=40)
@@ -121,7 +184,10 @@ class UniversalInstallerApp:
         self.install_progress.pack_forget()
 
         if self.os_type == "Windows":
-            self.check_and_install_chocolatey()
+            self.package_manager_var = tk.StringVar(value="winget")
+            tk.Label(self.root, text="Select Package Manager:").pack(pady=10)
+            self.package_manager_menu = ttk.OptionMenu(self.root, self.package_manager_var, "winget", "winget", "chocolatey")
+            self.package_manager_menu.pack(pady=10)
         elif self.os_type == "Mac":
             self.check_and_install_brew()
 
@@ -173,33 +239,50 @@ class UniversalInstallerApp:
             return []
 
     def search_windows(self, program_name):
-        try:
-            search_command = ["choco", "search", program_name]
+        package_manager = self.package_manager_var.get()
 
-            self.toggle_buttons(state=tk.DISABLED)
-            result = subprocess.run(search_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if package_manager == "winget":
+            search_command = ["winget", "search", program_name]
+        elif package_manager == "chocolatey":
+            search_command = ["choco", "search", program_name]
+        else:
+            messagebox.showerror("Error", "Unsupported package manager selected.")
+            return []
+
+        self.toggle_buttons(state=tk.DISABLED)
+        try:
+            result = subprocess.run(
+                search_command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                shell=True, 
+                env=os.environ.copy(), 
+                encoding='utf-8' 
+            )
             self.toggle_buttons(state=tk.NORMAL)
 
-            if result.returncode == 0:
+            if result.returncode == 0 and result.stdout:
                 output = result.stdout.splitlines()
                 return self.parse_search_output(output)
             else:
-                messagebox.showerror("Error", f"Search command failed with exit code {result.returncode}.")
+                messagebox.showerror("Error", f"Search command failed with exit code {result.returncode}.\nCheck winget_debug_log.txt for details.")
                 return []
         except Exception as e:
+            self.toggle_buttons(state=tk.NORMAL)
             messagebox.showerror("Error", f"Failed to search for {program_name}: {e}")
             return []
 
     def detect_os(self):
-        os_system = platform.system()
-        if os_system == "Linux":
-            return "Linux"
-        elif os_system == "Darwin":
-            return "Mac"
-        elif os_system == "Windows":
+        os_name = platform.system()
+        if os_name == "Windows":
             return "Windows"
+        elif os_name == "Linux":
+            return "Linux"
+        elif os_name == "Darwin":
+            return "Mac"
         else:
-            return "Unknown"
+            return "Unsupported"
 
     def search_program(self):
         program_name = self.program_entry.get().strip()
@@ -269,10 +352,17 @@ class UniversalInstallerApp:
         selected_index = self.results_listbox.curselection()
         if selected_index:
             selected_text = self.results_listbox.get(selected_index)
-            self.selected_program = selected_text.split()[0].split(":")[0]
+
+            program_name = selected_text.split()[0].split(":")[0]
+            if self.os_type == "Windows" and self.package_manager_var.get() == "winget":
+                columns = selected_text.split() 
+                program_name = columns[-3] 
+
+            self.selected_program = program_name
             self.program_entry.delete(0, tk.END)
             self.program_entry.insert(0, self.selected_program)
             self.results_window.destroy()
+
 
     def run_install_command_windows(self, install_command):
         command = [
@@ -341,12 +431,20 @@ class UniversalInstallerApp:
                         install_command = f"brew install {' '.join(programs)}"
                         commands.append((install_command, False))
                 elif self.os_type == "Windows":
-                    if self.upgrade_var.get():
-                        commands.append(("choco upgrade all -y", False))
-                    if programs:
-                        install_command = f"choco install {' '.join(programs)} -y"
-                        commands.append((install_command, False))
-                    
+                    package_manager = self.package_manager_var.get()
+                    if package_manager == "winget":
+                        if self.upgrade_var.get():
+                            commands.append(("winget upgrade --all", False))
+                        if programs:
+                            install_command = f"winget install {' '.join(programs)} --accept-source-agreements --accept-package-agreements"
+                            commands.append((install_command, False))
+                    elif package_manager == "chocolatey":
+                        if self.upgrade_var.get():
+                            commands.append(("choco upgrade all -y", False))
+                        if programs:
+                            install_command = f"choco install {' '.join(programs)} -y"
+                            commands.append((install_command, False))
+                                    
                     for command, _ in commands:
                         command_success, output = self.run_install_command_windows(command)
                         if not command_success:
