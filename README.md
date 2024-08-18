@@ -39,6 +39,7 @@ Homebrew
 
 ## Windows:
 Chocolatey
+
 WinGet
 
 ## Prerequisites
