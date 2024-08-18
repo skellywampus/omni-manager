@@ -39,6 +39,7 @@ Homebrew
 
 ## Windows:
 Chocolatey
+WinGet
 
 ## Prerequisites
 Ensure that Python 3.x is installed on your system. You can download it from python.org.
@@ -61,7 +62,7 @@ The application window will display the detected operating system and present op
 
 ## Searching for Software
 
-Enter the name of the software package you want to search for in the "Enter Program Name(s)" field.
+Enter the name of the software package you want to search for in the "Enter Program Name or ID" field.
 Click the Search button.
 A new window will appear with a list of search results. You can navigate through the results using the Next Page and Previous Page buttons.
 Select the desired software from the list and click Select.
@@ -75,6 +76,7 @@ If the installation requires sudo privileges, a password prompt will appear.
 
 ## For Windows:
 The program will trigger a UAC prompt for elevated privileges.
+If using winget, the installation will handle program IDs and agreements automatically.
 
 ## Updating/Upgrading Software
 Check the Update All or Upgrade All checkboxes to update or upgrade all installed software packages, respectively.
